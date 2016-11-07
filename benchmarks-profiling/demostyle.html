@@ -1,0 +1,11 @@
+<script>
+(function() {
+    var article = document.currentScript.parentElement;
+    window.addEventListener('load', function(){
+        var pre = article.querySelector('.ui-resizable pre');
+        var sz = '10px';
+        pre.style['font-size'] = sz;
+        pre.style['line-height'] = sz;
+    });
+})();
+</script>

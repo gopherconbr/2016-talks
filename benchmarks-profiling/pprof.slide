@@ -1,0 +1,352 @@
+Benchmarks e Profiling
+Tags: golang, pprof, benchmark, profiling
+
+Cezar Sá Espinola
+@tsurupaas
+http://github.com/cezarsa
+cezarsa@gmail.com
+
+https://github.com/cezarsa/gopherconbr2016
+
+* Code
+
+.html demostyle.html
+.play -edit demo1/demo1.go /^func sineCircle/,/^}/
+
+: demo1
+
+* Enabling pprof
+
+.code demo2/demo2.go /^func main/,/^}/
+
+: demo2
+
+* Demo
+
+  $ go build
+
+  $ ./demo2
+
+  $ go tool pprof ./demo2 cpu.pprof
+  (pprof) top
+  3360ms of 3360ms total (  100%)
+        flat  flat%   sum%        cum   cum%
+      3260ms 97.02% 97.02%     3260ms 97.02%  syscall.Syscall
+       100ms  2.98%   100%     3360ms   100%  main.sineCircle
+           0     0%   100%     3360ms   100%  main.main
+           0     0%   100%     3260ms 97.02%  os.(*File).Write
+           0     0%   100%     3260ms 97.02%  os.(*File).write
+
+Your best friends:
+
+- top
+- peek
+- list
+
+: demo2
+
+* Better visualization?
+
+Web
+
+  $ go tool pprof -web ./demo2 cpu.pprof
+
+Callgrind
+
+  $ go tool pprof -callgrind ./demo2 cpu.pprof > callgrind.cpu
+  $ qcachegrind callgrind.cpu
+
+* With benchmarks
+
+.code demo3/demo3_test.go /^func Benchmark/,/^}/
+
+  $ go test -bench . -benchmem -cpuprofile cpu.pprof
+  BenchmarkSineCircle-4   	   50000	     27437 ns/op	    6120 B/op	     765 allocs/op
+  PASS
+
+  $ go tool pprof ./demo3.test cpu.pprof
+  (pprof) top
+  1290ms of 1390ms total (92.81%)
+  Showing top 10 nodes out of 57 (cum >= 20ms)
+        flat  flat%   sum%        cum   cum%
+       300ms 21.58% 21.58%      540ms 38.85%  runtime.mallocgc
+       230ms 16.55% 38.13%      890ms 64.03%  runtime.rawbyteslice
+       180ms 12.95% 51.08%      180ms 12.95%  runtime.mach_semaphore_signal
+       130ms  9.35% 60.43%      130ms  9.35%  runtime.memclr
+       130ms  9.35% 69.78%     1110ms 79.86%  runtime.stringtoslicebyte
+       110ms  7.91% 77.70%     1340ms 96.40%  _/Users/cezarsa/code/gophercon/demo3.sineCircle
+
+: demo3
+
+* Analysing
+
+Something weird?
+
+Maybe io.Discard isn't the right choice here, let's try something different.
+
+.code demo4/demo4_test.go /^func Benchmark/,/^}/
+
+  $ go test -bench . -benchmem -cpuprofile cpu.pprof
+  BenchmarkSineCircle-4   	    3000	    441941 ns/op	   48960 B/op	    2295 allocs/op
+  PASS
+
+: demo4
+
+* Analysing (again)
+
+  (pprof) top
+  1.23s of 1.23s total (  100%)
+  Showing top 10 nodes out of 31 (cum >= 1.21s)
+        flat  flat%   sum%        cum   cum%
+       1.20s 97.56% 97.56%      1.20s 97.56%  syscall.Syscall
+       0.01s  0.81% 98.37%      0.01s  0.81%  runtime.heapBitsSetType
+       0.01s  0.81% 99.19%      0.01s  0.81%  runtime.mach_semaphore_signal
+       0.01s  0.81%   100%      0.01s  0.81%  runtime.mach_semaphore_wait
+           0     0%   100%      1.21s 98.37%  _/Users/cezarsa/code/gophercon/demo4.BenchmarkSineCircle
+           0     0%   100%      1.21s 98.37%  _/Users/cezarsa/code/gophercon/demo4.sineCircle
+
+Now it looks more like our first profile run.
+
+: demo4
+
+* Improving based on benchmarks
+
+.html demostyle.html
+.play demo5/demo5.go /^func sineCircle/,/^}/
+
+: demo5
+
+* Comparing benchmarks
+
+  $ go get golang.org/x/tools/cmd/benchcmp
+
+  // ./demo4
+  $ go test -bench . -benchmem > ../before.txt
+
+  // ./demo5
+  $ go test -bench . -benchmem > ../after.txt
+
+  $ benchcmp before.txt after.txt
+  benchmark                 old ns/op     new ns/op     delta
+  BenchmarkSineCircle-4     440956        31599         -92.83%
+
+  benchmark                 old allocs     new allocs     delta
+  BenchmarkSineCircle-4     2295           768            -66.54%
+
+  benchmark                 old bytes     new bytes     delta
+  BenchmarkSineCircle-4     48960         10272         -79.02%
+
+: demo5
+
+* Can we go faster?
+
+  $ go test -bench . -benchmem -cpuprofile cpu.pprof
+
+  $ go tool pprof ./demo5.test cpu.pprof
+  (pprof) top
+  1.90s of 1.90s total (  100%)
+  Showing top 10 nodes out of 40 (cum >= 1.84s)
+        flat  flat%   sum%        cum   cum%
+       1.83s 96.32% 96.32%      1.84s 96.84%  syscall.Syscall
+       0.05s  2.63% 98.95%      0.05s  2.63%  runtime.mach_semaphore_signal
+       0.01s  0.53% 99.47%      0.01s  0.53%  runtime.mach_semaphore_wait
+       0.01s  0.53%   100%      0.01s  0.53%  runtime.mallocgc
+           0     0%   100%      1.85s 97.37%  _/Users/cezarsa/code/gophercon/demo5.BenchmarkSineCircle
+           0     0%   100%      1.85s 97.37%  _/Users/cezarsa/code/gophercon/demo5.sineCircle
+           0     0%   100%      1.84s 96.84%  bufio.(*Writer).Flush
+           0     0%   100%      1.84s 96.84%  bufio.(*Writer).flush
+
+: demo5
+
+* Let's assume all IO is buffered
+
+.code demo6/demo6_test.go /^func BenchmarkSineCircle/,/^}/
+
+.html demostyle.html
+.play demo6/demo6.go /^func sineCircle/,/\s+for/
+
+: demo6
+
+* Bench, profile, ...
+
+  $ go test -bench . -benchmem -cpuprofile cpu.pprof
+  BenchmarkSineCircle-4   	   50000	     28320 ns/op	    6120 B/op	     765 allocs/op
+  PASS
+  ok  	_/Users/cezarsa/code/gophercon/demo6	1.710s
+
+  $ go tool pprof ./demo6.test cpu.pprof
+  (pprof) list sineCircle
+  Total: 1.41s
+  ROUTINE ======================== _/Users/cezarsa/code/gophercon/demo6.sineCircle in /Users/cezarsa/code/gophercon/demo6/demo6.go
+        60ms      1.39s (flat, cum) 98.58% of Total
+           .          .      9:func sineCircle(w io.Writer, r int) {
+           .          .     10:	xScale := 2.0
+           .          .     11:	for l := 0; l <= r*2; l++ {
+           .       80ms     13:		alpha := math.Acos(float64(r-l) / float64(r))
+           .       10ms     14:		x := int(float64(r) * math.Sin(alpha) * xScale)
+           .          .     16:		padding := int(xScale*float64(r)) - x
+           .          .     17:		for j := 0; j < padding; j++ {
+        20ms      150ms     18:			w.Write([]byte(" "))
+           .          .     19:		}
+        20ms       20ms     21:		for j := 0; j <= x*2; j++ {
+        10ms      1.10s     22:			w.Write([]byte("*"))
+           .          .     23:		}
+        10ms       30ms     25:		w.Write([]byte("\n"))
+
+: demo6
+
+* ..., tweak and repeat
+
+.code demo7/demo7.go /^func sineCircle/,/^}/
+
+  $ go test -bench . -benchmem -cpuprofile cpu.pprof
+  BenchmarkSineCircle-4   	  300000	      4821 ns/op	    1152 B/op	      60 allocs/op
+  PASS
+
+: demo7
+
+* Comparing
+
+  // ./demo6
+  $ go test -bench . -benchmem > ../before.txt
+
+  // ./demo7
+  $ go test -bench . -benchmem > ../after.txt
+
+  $ benchcmp before.txt after.txt
+  benchmark                 old ns/op     new ns/op     delta
+  BenchmarkSineCircle-4     29240         5042          -82.76%
+
+  benchmark                 old allocs     new allocs     delta
+  BenchmarkSineCircle-4     765            60             -92.16%
+
+  benchmark                 old bytes     new bytes     delta
+  BenchmarkSineCircle-4     6120          1152          -81.18%
+
+: demo7
+
+* Now, for something different
+
+.html smallcode.html
+.play -edit demo8/demo8.go /^func/,$
+
+: demo8
+
+* bench, profile, ...
+
+.code demo8/demo8_test.go /^func Benchmark/,/^$/
+
+  $ go test -bench . -benchmem -cpuprofile cpu.pprof
+  BenchmarkEncodePrint-4   	   20000	     60886 ns/op	   21872 B/op	    1037 allocs/op
+
+  $ go tool pprof ./demo8.test cpu.pprof
+  (pprof) top
+  3.12s of 3.18s total (98.11%)
+  Dropped 16 nodes (cum <= 0.02s)
+  Showing top 10 nodes out of 58 (cum >= 0.02s)
+      flat  flat%   sum%        cum   cum%
+      1.67s 78.77% 78.77%      1.67s 78.77%  runtime.mach_semaphore_signal
+      0.26s 12.26% 91.04%      0.26s 12.26%  runtime.mach_semaphore_wait
+      0.12s  5.66% 96.70%      0.12s  5.66%  runtime.usleep
+      0.02s  0.94% 97.64%      0.02s  0.94%  runtime.mach_semaphore_timedwait
+      0.02s  0.94% 98.58%      0.03s  1.42%  runtime.rawstring
+
+: demo8
+
+* mem profile
+
+cpu profile not very useful in this case
+
+  $ go test -bench . -benchmem -memprofile mem.pprof
+
+- inuse_space
+- inuse_objects
+- alloc_space
+- alloc_objects
+
+  $ go tool pprof -alloc_space ./demo8.test mem.pprof
+  (pprof) top
+  598.24MB of 598.75MB total (99.91%)
+  Dropped 10 nodes (cum <= 2.99MB)
+      flat  flat%   sum%        cum   cum%
+  542.74MB 90.64% 90.64%   598.24MB 99.91%  _/Users/cezarsa/code/gophercon/demo8.(*encoder).encode
+   55.50MB  9.27% 99.91%    55.50MB  9.27%  strconv.formatBits
+         0     0% 99.91%   598.24MB 99.91%  _/Users/cezarsa/code/gophercon/demo8.BenchmarkEncodePrint
+
+: demo8
+
+* ..., tweak and repeat
+
+.code demo9/demo9.go /sync.Pool/,/^}/
+
+.code demo9/demo9.go /\) encode\(/,/^}/
+
+.play -edit demo9/demo9.go /(range e\.ch)/,/}/
+
+: demo9
+
+* Comparing
+
+  $ benchcmp before.txt after.txt
+  benchmark                  old ns/op     new ns/op     delta
+  BenchmarkEncodePrint-4     60015         56996         -5.03%
+
+  benchmark                  old allocs     new allocs     delta
+  BenchmarkEncodePrint-4     1037           1025           -1.16%
+
+  benchmark                  old bytes     new bytes     delta
+  BenchmarkEncodePrint-4     21872         2109          -90.36%
+
+* Back to profiling
+
+  $ go tool pprof -alloc_objects ./demo9.test mem.pprof
+  (pprof) top
+  4817545 of 4817545 total (  100%)
+      flat  flat%   sum%        cum   cum%
+   4784201 99.31% 99.31%    4784201 99.31%  strconv.formatBits
+     32769  0.68%   100%      32769  0.68%  _/Users/cezarsa/code/gophercon/demo9.(*encoder).consumer.func1
+       575 0.012%   100%    4784776 99.32%  _/Users/cezarsa/code/gophercon/demo9.(*encoder).encode
+         0     0%   100%    4784776 99.32%  _/Users/cezarsa/code/gophercon/demo9.BenchmarkEncodePrint
+
+: demo9
+
+* More tweaks
+
+.code demo10/demo10.go /hexMap/,/^}/
+
+.play -edit demo10/demo10.go /\) encode\(/,/^}/
+
+: demo10
+
+* Comparing
+
+  $ benchcmp before.txt after.txt
+  benchmark                  old ns/op     new ns/op     delta
+  BenchmarkEncodePrint-4     56158         16768         -70.14%
+
+  benchmark                  old allocs     new allocs     delta
+  BenchmarkEncodePrint-4     1025           1              -99.90%
+
+  benchmark                  old bytes     new bytes     delta
+  BenchmarkEncodePrint-4     2107          32            -98.48%
+
+Huge gain, usually:
+
+- Less allocations == More performance
+- Prioritize reducing number of allocations instead of size of allocations for performance
+
+* Bonus: net/http/pprof
+
+.code demo11/demo11.go /import/,/^\)/
+.play -edit demo11/demo11.go /func main/,/^}/
+
+.link http://localhost:10101
+
+  $ wrk -d 1m -c 100 http://localhost:10101
+  $ go tool pprof http://localhost:10101/debug/pprof/profile
+
+* Bonus: flamegraphs
+
+  $ docker run uber/go-torch -u http://localhost:10101 -p > out.svg
+
+.link demo11/out.svg

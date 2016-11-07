@@ -1,0 +1,12 @@
+<script>
+(function() {
+    var article = document.currentScript.parentElement;
+    window.addEventListener('load', function(){
+        var pres = article.querySelectorAll('div.code pre');
+        for (var i = 0; i < pres.length; i++) {
+            pres[i].style['font-size'] = '17px';
+            pres[i].style['line-height'] = '19px';
+        }
+    });
+})();
+</script>
