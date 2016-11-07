@@ -1,0 +1,270 @@
+Building resilient services in Go
+Handling timeouts properly
+04 Nov 2016
+Tags: go, golang, resilience, services, REST, microservices, someotherbuzzword
+
+Tiago Katcipis
+Neoway Business Solution
+tiago.katcipis@neoway.com.br
+http://github.com/NeowayLabs/presentations
+
+
+* About
+
+- Software Developer
+- Data capture team
+- Crawlers
+- Supporting services (storage, captchas, proxies)
+- Go in production for almost two years
+
+
+* Agenda
+
+- Resilience
+- Timeouts
+- Context
+- Simple timeouts with contexts
+- Calling expensive long running job
+- Context best practices
+- Making HTTP requests
+- Serving HTTP requests
+
+
+* Resilience
+
+- Broad subject
+- Encompasses dev + testing + ops
+- Will focus on timeouts
+
+
+* Be cynical
+
+
+It is not a matter of if it will fail but what will happen when it fails
+
+- Will your entire system freeze ?
+- Start to answer with errors to never recover again until restarted manually ?
+- Attend all clients equally poorly ?
+
+
+* Things that can go wrong
+
+- Downstream dependency not answering
+- Downstream dependency giving errors
+- Connections gets dropped
+- Connection fails to handshake
+- Connection takes 10 minutes to handshake
+- An answer of a request is received with a speed of 1 byte per minute
+- The request body is received with a speed of 1 byte per minute
+- No more disk available
+- No more file descriptors available
+- No more memory available
+- Sun flares flips bits from the memory :-)
+
+
+* How far ?
+
+- It can get as resilient as it can get
+- Pretty much like security :-)
+- Choose something to start with
+
+
+* Microservices
+
+.image ./img/integration-points.jpg _ 700
+
+
+* Microservices
+
+- Local call != Remote call
+- Having lots of small services = lots of small integration points
+- Networks have really fun ways to fail
+
+
+* Timeouts
+
+- Integration points must have timeouts
+- Expensive and long running ops must have timeouts
+- Seems simple, but it is easy to don't do it
+- Go makes it even simpler :-)
+
+
+* context.Context
+
+- Moved to Go core in 1.7
+- Models timeouts/deadlines and cancellation
+
+
+* context.Context
+
+.code examples/context.go
+
+
+* Timeout Context
+
+- Will be canceled when timeout expires
+- Or when cancel is called
+
+
+* Waiting to expire
+
+.play examples/expiration.go /^func main/,/^}/
+
+
+* cancel
+
+- Always call it
+- Guarantee resources are freed ASAP
+
+
+* Canceling explicitly
+
+.play examples/cancellation.go /^func main/,/^}/
+
+
+* Context hierarchy: Child exits first
+
+.play examples/hierarchy.go /^func main/,/^}/
+
+
+* Context hierarchy: Parent exits first
+
+.play examples/hierarchy2.go /^func main/,/^}/
+
+
+* Context hierarchy: Parent cancelled
+
+.play examples/hierarchy3.go /^func main/,/^}/
+
+
+* An expensive operation
+
+- Take any function that can take some time to execute
+- Avoid being locked on that function
+- Guarantee a minimum response time for the client
+
+
+* The expensive operation
+
+.code examples/expensive.go /^func expensiveOp/,/^}/
+
+
+* Calling expensive operation
+
+.play examples/expensive.go /^func main/,/^}/
+
+
+* Use case
+
+- Plugin like stuff
+- Each plugin can be as simple as a function
+- The core functionality can protect itself from bad behaved plugins
+- Plugins can still leak resources or get locked forever
+- But the core will never get locked
+- Clients have a guaranteed maximum response time
+
+
+* Timeout Overview
+
+- Waiting for timeout is as simple as reading a channel
+- It leverages Go closed channel behaviour
+- Multiple goroutines can be waiting for a single done
+- Contexts are hierarchical
+- Cancelling parent cancels all children
+
+
+* Context best practices
+
+- Callee where context are inject can't cancel the operation
+- Propagate context as the first parameter of functions
+- When creating new contexts, leverage the hierarchical model
+- Avoid using the values thing, basically a map[interface{}]interface{}
+
+
+* Client side HTTP
+
+
+* Go's default HTTP client methods
+
+.image ./img/bad-time.jpg _ 600
+
+
+* Why ?
+
+.code ./examples/default-client.go
+
+- Can you see where is the timeout ?
+- No, because there is none :-)
+- The default value = 0
+- Which means forever
+
+
+* Why ?
+
+.image ./img/timeout.jpg _ 500
+
+
+* HTTP Streaming
+
+- A theoretical infinite stream of events
+- Streaming a large video (hours)
+- Basically any big progressive download
+- It makes some sense to default to forever
+- But for integration between your services usually it does not
+
+
+* http.Client timeout
+
+.code ./examples/http-client-timeout.go /^func main/,/^}/
+
+- Its the entire timeout, including total time to read the response body
+
+
+* http.Request with a context
+
+.code ./examples/http-request-context.go /^func main/,/^}/
+
+- Can specify different timeout per request
+- Can cancel a request for some other reason
+- Works well with the http.Client timeout
+- Requests have a Cancel channel, it is deprecated in favor of Contexts
+
+
+* Client side HTTP gist
+
+- Just use default http methods for streaming
+- Or if you want to get locked up forever if something goes wrong :-)
+- For fast interactions with other services, always be explicit
+- use http.Client + requests individual cancellation
+
+
+* Server side HTTP
+
+.code ./examples/default-server.go /^func main/,/^}/
+
+- Same default as HTTP clients
+- Useful for streaming, dangerous for other cases
+- Slow clients can consume all your file descriptors (open connections)
+
+
+* http.Server
+
+.code ./examples/server.go
+.image ./img/server-timeout.png _ 1000
+
+
+* Proper Server side code
+
+.code ./examples/proper-server.go /^func main/,/^}/
+
+- Almost same code
+- But with proper timeouts
+
+
+* Further reading
+
+- https://blog.golang.org/pipelines
+- https://blog.golang.org/context
+- http://golang.rakyll.org/leakingctx
+- https://peter.bourgon.org/blog/2016/07/11/context.html
+- https://blog.cloudflare.com/the-complete-guide-to-golang-net-http-timeouts
