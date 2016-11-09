@@ -1,0 +1,280 @@
+The road to graphql-go 1.0
+Gophercon Brasil
+4 Nov 2016
+Tags: graphql, graphql-go
+
+Chris Ramón
+@cramonn
+
+* About me
+
+- Chris Ramón
+- eventlama.com
+- graphql-go
+
+: Good afternoon everybody, my name is Chris Ramón, thanks for coming to see this presentation, really appricate it!, and also thanks to the organizers for making this awesome gophercon possible in south-america!.
+: I work at eventlama.com as a software engineer, and eventlama is an awesome event management application which used by some of the biggest developer conferences in europe, and on spare time I'm like and try to contribute to the Go community, and now lately mainly contributing to the graphql-go library.
+
+* Agenda
+
+- GraphQL
+- graphql-go
+- history, architecture, challenges and community
+- road to 1.0 
+
+: This is the agenda for the presentation of today
+: First I'm going to do an introduction to GraphQL
+: Then We'll be exploring the graphql-go library.
+: I'll talk about how the lib started, the architecture, some interesting challenges that appeared on the road, and the community around graphq-go.
+: And finally i'll talking about the potential next steps that might take the lib to the first stable version.
+
+* GraphQL
+
+: So, what is GraphQL?
+
+* GraphQL
+- Query Language and a runtime for applications.
+- Servers: exposes their capabilities
+- Clients: query for data, mutate data, subscribe to events
+- Created at Facebook on 2012
+- Spec. released on 2014 along with JS ref. implementation
+- Implementations in different PLs
+
+: GraphQL is a query language and a runtime for applications, 
+: It is agnostic of the programming language and the data store, meaning
+: it can be implemented as an extra layer of our applications.
+: We can use GraphQL to create interactions between servers and clients
+: With GraphQL:
+: Servers exposes their capibilities.
+: Clients can query for data, mutate data and/or subscribe to events.
+: GraphQL was created at Facebook on 2012 and since then they are using it on production.
+: Specification was released on 2014 along with the JS reference implementation.
+: Today there are many GraphQL implementations for different programming languages, one of them is the graphql-go library which is the topic of this presentation.
+
+
+* GraphQL
+.image gql-intro-1.png
+: Now ... let's explore the GraphQL concepts with a step by step diagram ..
+: Let's say we have a server, which has a graphql layer implemented on it.
+
+* GraphQL
+.image gql-intro-2.png
+: And also we have client, where the client could be any frontend really
+
+* GraphQL
+.image gql-intro-3.png
+: For example it could be a mobile app.
+
+* GraphQL
+.image slide8.png
+: So this mobile app has a view where it needs to display the github information of the current user, or the viewer as is called by the github API, let's say the viewer is the octocat github user.
+: So in order to display avatar, login(or username), and the email of the viewer, the mobile app needs to obtain the data from the server.
+
+* GraphQL
+.image slide9.png
+: So the mobile app sends a HTTP request to the /graphql endpoint ... and how does the HTTP body looks like for this request?
+
+* GraphQL
+.image slide10.png
+: Well, here is where the GraphQL syntax comes in, it's quite similar like JSON syntax, but only with keys, and as you can see the mobile app only requests the viewer fields that is needed: the avatar url, the login and the email, there is no over-fetching or under-fetching of data.
+: So the server which has a GraphQL layer implemented; receives the request, executes the query string and returns the result.
+
+* GraphQL
+.image slide11.png
+: And as we can see the response is in JSON format and it has the same shape as the query string sent by the mobile app, it only contains the data that was requested, nothing less nothing more.
+
+* GraphQL — Queries
+.image slide12.png
+: And now the mobile app can render the information of the github user octocat.
+: So this example is how clients can query for data using GraphQL, now let's explore how clients can mutate data.
+
+* GraphQL — Mutations
+.image gql-intro-9.png
+: So in this example, now the mobile app, has a view where the current user can create a project for a given github repository.
+: There are only two fields required, the name and the body or description of the project. 
+
+* GraphQL
+.image gql-intro-10.png
+: If the user fills and submits the form, the mobile app sends a HTTP request to the /graphql endpoint, and now how does the HTTP request body looks like?
+
+* GraphQL
+.image gql-intro-11.png
+: Again here is where the GraphQL syntax comes in, now is a mutation query string, let's explore it step by step
+
+* GraphQL
+.image slide16.png
+: First we define that the query string is a mutation one. 
+
+* GraphQL
+.image slide17.png
+: Then we specify the name of the mutation, in this case, we want to create a project, and we specify the arguments for this mutation, in this case we want to create the project for the owner with id 5, and with the given name and body.
+
+* GraphQL
+.image slide18.png
+: Next we speficy which fields we want to get back from the project type, after the mutation was succesfully executed, in this case, we want to receive the id, name & body.
+
+* GraphQL
+.image slide19.png
+: So this mutation is sent to the server, the server receives it, executes it and returns the result.
+
+* GraphQL
+.image slide20.png
+: The result is in JSON format and contains: the name of the mutation and the project type fields that was requested. 
+
+* GraphQL
+.image slide21.png
+: The project type result shape is the same as the one requested, and again the mobile app receives only the fields that was requested.
+
+* GraphQL ̣̣̣— Mutations
+.image slide20.png
+: So this example was about how we can successfully mutate data on the server. 
+
+* graphql-go
+- Started on mid July 2015 
+- 100% parity tests with graphql-js v.0.5.0 
+- 17 contributors 
+- ~70 PR & ~30 Issues
+- Heading 1.0-alpha 
+- More graphql-go members
+- Re-active development towards 1.0
+: Now, let's explore the graphq-go library.
+: After the GraphQL specification was annouced on 2015, I got really execited about it
+: and really looked forward to try it out and perhaps use it on some Go programs I write
+: because I had the opportunity to see the problems that GraphQL solves when we write
+: API's that follows other traditional strategies.
+: At that time after some days trying to find a GraphQL implementation on Go, I could not find one besides the experimental ones that
+: some awesome developers wrote and shared on github.
+: Since I could not find one that could be use in production
+: I decided to write one implementation for Go and it started on mid July 2015
+: And the strategy right from the beginning was to follow the GraphQL JavaScript reference implementation.
+: And keep parity with it.
+: The current version of the lib, is in parity with the v0.5.0 of graphql-js
+: and we have 100% parity of passing tests.
+: There are about 17 ppl that succesfully contributed to the lib from different places around the world.
+: And we are happy to annouce that we are heading the 1.0-alpha version of the lib and looking forward to ship it in the upcoming weeks.
+: And also we are going to add more graphql-go members, so we can work all together on make the lib even more stable, fast and simple to use lib for the end-users.
+: So since some weeks ago we reactivated the develpment towards the 1.0 version of the lib
+
+* graphql-go — Schema
+.code ../../graphql-go-contacts-app/main.go /START1/,/STOP1/
+: Now let's explore how we can use the lib in order to create interactions between server and clients.
+: GraphQL servers exposes their capabilities to clients, through the schemas.
+: Meaning schemas are were we define, how clients can interact with servers, via queries or mutations. 
+: Here this schema has two fields, query and mutation. 
+: For the query field, we define a new graphql object, which contains the capabilities of the server
+: meaning clients can: get the current user of the application,
+: get a single contact
+: get a list of contacts. 
+: And for the mutation field, we define a new graphql object, which contains what kind of mutations
+: clients can perform. 
+: Here clients can create a contact.
+
+
+* graphql-go — Query
+.code ../../graphql-go-contacts-app/queries/queries.go /START1/,/STOP1/
+.code ../../graphql-go-contacts-app/models/models.go /START1/,/STOP1/
+: Now let's explore how we define the CurrentUser field.
+: First we define the type of this field, in this case is a graphql object.
+: So for this user type, we can define other sub-fields, in this case
+: the user type has 4 fields: id for int type, and firstname, lastname and email of string type
+: Next we have the resolve function, and within we write the code logic
+: of how this field is going to be resolved when present in a query string.
+: In this case, we just grab the current user from the request context,
+: and returns it.
+: Also the resolve function of each field, can return an error as a second return
+: value, if is the case. 
+
+* graphql-go — Query
+.play ../../graphql-go-contacts-app/client/queries.go /START1/,/STOP1/
+: Now let's send a query string to the schema we previously saw.
+: Here we define a query string asking for the current user type
+: and requesting only two fields the id and the firstname. 
+: We use a helper function to make an http request to a local server
+: that uses the graphql-go library
+: Which returns the result of the query string executed on the server as a first value.
+: Let's run this code ...
+: Cool, now let's move on to mutations.
+
+
+* graphql-go — Mutation
+.code ../../graphql-go-contacts-app/mutations/mutations.go /START1/,/STOP1/
+: Now let's explore how we define the create contact mutation field.
+: First we define what is the type of this field, in this case is a new graphql object 
+: Then we define which arguments this mutation can receive, we use it to receive
+: data from the client, and so we have to define, the type for each.
+: Next, we have the resolve function for this mutation
+: we convert all the arguments from the client to the correct type, since they are interfaces
+: once we have them ready
+: we create a new instance of the contact struct and set the fields
+: Next we can persist this contact and/or do something else with it.
+: In this case we are saving to the database.
+: Again in a case of an error we just return it as a second return value
+: so clients can now what went wrong.
+
+* graphql-go — Mutation
+.code ../../graphql-go-contacts-app/models/models.go /START2/,/STOP2/
+
+* graphql-go — Mutation
+.play ../../graphql-go-contacts-app/client/mutations.go /START1/,/STOP1/
+: Now let's try to send a mutation query string to our contacts schema defined before.
+: First we define the mutation query string, in this case we
+: want to execute the createContact mutation and we provide the arguments firstname and email
+: that can be used within the resolve function of this mutation.
+: Next we define which fields we want to get back once the mutation is succesfully executed on the server
+: we are requesting for the id, firstname and email.
+: Next we use a helper Post function to send an http request to a local graphql server and we send the query mutation.
+: which again returns the result of the request as a first return value.
+: and we print the result.
+
+* graphql-go — Road to 1.0
+- Bugs
+- Parity to latest graphql-js
+- Close PR's & Issues labeled as 1.0-alpha
+- API improvements
+- Perf improvements
+- Docs, and more examples
+: This is are the top priorities that from my humble opinion we should be focusing on
+: to reach the first stable version, of of them are pretty obvious, but we are going to
+: to be sharing on the github repository with the details for each. 
+: There are many reported bugs that we are going to tackle and fix before the 1.0
+: Also we want to get back the parity with the latest graphql-js version
+: And close the pr's and issues labeled as 1.0-x
+: Also I think there are room for api improvements, def. we can make simpler
+: how develpers uses the lib, specially when defining schemas and types
+: And there is a initial work on performace improvements by some contributors
+: def. there is something we need to tackle and define the minimum base line
+: of how fast we want the lib to be when dealing with big query strings 
+: And finally documentation is something we want to work on, and provide
+: better guidelines on how effectively use the lib
+: Finally examples, we have many examples in the repo, but we're looking
+: forward to provide more specially for the real use cases of
+: production like applications. 
+
+* graphql-go — Community
+- Thanks all contributors! 
+- graphql-go-handler
+- graphql-relay-go
+- graphql-relay-starter-kit
+: In regards the community, I'm really happy to say
+: that the community around the lib has being so nice and helpful
+: the lib had caught the attetion of many contributors
+: and they hand being helping us since the beginning
+: For example there are other libs, around graphql-go which are 
+: getting in better shape thanks to the community.
+: graphql-go-handler is a related lib that help us to add graphql as a middleware for http request
+: graphql-relay-go is a rel lib that helps us to create react-realy server easily
+: and finally graphql-relay-starter-kit helps us as a starting point for realy applications using graphql-go 
+
+* graphql-go — Community
+- @sogko
+: I want to give a specially thanks to sogko, which is one contributir of the graphql-go lib
+: i remember his first PR where he basically re-wrote all the strategy on how we deal with errors in the lib
+: at the time we were not dealing it in a go idiomatic way, and he subitted this big PR improveming this
+: important part of the lib, it was really exicting, was the first PR and the initial amazing contributinon of sogko
+.image sogko.png
+
+: I would like to finish this talk by saying that:
+: there are tons of great go libs out there and many of them: from my humble opinion
+: need your help, and there many ways of doing so: from docs, code, reporting bugs and so on
+: so please do contriute, do share and together we can have an even more awesome go community
+: my name is chris ramon, thank you.
