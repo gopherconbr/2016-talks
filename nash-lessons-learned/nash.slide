@@ -1,0 +1,433 @@
+Nash
+Lessons learned writing a shell
+5 Nov 2016
+Tags: nash, go, shell, namespaces, containers
+
+Tiago Natel de Moura
+Neoway Business Solution
+tiago4orion@gmail.com
+https://github.com/tiago4orion
+@_i4k_
+
+* Nash
+
+- System shell written in Go
+- Inspired by Plan9 rc
+- Modern syntax (non POSIX)
+- Portable (with some caveats)
+- Only ONE way of doing things!
+
+* Motivation
+
+- Write lots of shell scripts to test a distributed file server;
+- Testing support;
+- Namespace support;
+- Easy to embed into go programs;
+- I hate bash/zsh/csh/...
+
+* What I wanted
+
+.code ./rfork_ex.sh /#!\/usr\/bin\/env nash/,/# END OMIT/
+
+* What I wanted
+
+.code ./rfork_ex.sh /#!\/usr\/bin\/env nash/,/# END OMIT/ HL1
+
+* What I wanted
+
+.code ./rfork_ex.sh /#!\/usr\/bin\/env nash/,/# END OMIT/ HL2
+
+* What I wanted
+
+.code ./rfork_ex.sh /#!\/usr\/bin\/env nash/,/# END OMIT/ HL3
+
+* What I wanted
+
+.code ./rfork_ex.sh /#!\/usr\/bin\/env nash/,/# END OMIT/ HL4
+
+* Unix Shells
+
+A Unix shell was tipically:
+
+  fork -> execve -> wait (optional)
+
+with a crappy language around it...
+
+* Shells
+
+But If it has job control, then it must handle process groups and
+sessions.
+
+  1 session       -> N process groups
+  1 process group -> N processes
+  1 process       -> N process threads
+
+All have ID's (Unix way...)
+
+- Session ID (SID)
+- Process group ID (PGID)
+- Process ID (PID)
+- Process thread ID (TID)
+
+_But_job_control_is_rarely_used_today,_then_I_decided_to_avoid_this_complication_
+
+* Nash
+
+Then, _Nash_ shell is basically:
+
+  rfork -> execve -> wait (optional)
+
+with a sane language around it.
+
+* Nash features
+
+*100%* *Go*
+
+Functions are first-class:
+
+- Have explicit arguments
+- Return values (or other function)
+- Could be stored in variables
+- Could be passed as arguments to other functions
+- Could bind to command names (aliases)
+
+Support process isolations out of the box.
+
+- Linux namespaces (USER, PID, MNT, UTS, IPC, NET)
+- Plan9 namespaces (soon)
+
+* Nash features
+
+Safe:
+
+- No eval (no exec, backticks, etc)
+- No file wildcard (globbing)
+- No string expansions (strings are just strings)
+- No ...
+- No ...
+- Yeah, you get the idea. A shell with nothing that makes it a shell...
+
+* Nash features
+
+Modern:
+
+- Command redirection to network location
+
+.code net.sh
+
+- Do not mix commands and strings
+
+.code cmd.sh
+
+- Explicit
+
+.code if.sh
+
+* Nash features
+
+Works by default:
+
+- Abort on first error (set -e)
+- Abort on first use of unset variables (set -u)
+- Return status of every command of a pipeline (like _rc_)
+
+* Nash features
+
+- Supports embedding in Go programs;
+- Supports tooling (nashfmt and like);
+
+* Implementation
+
+Is Go suited for this task?
+
+We need:
+
+- Process spawning facilities
+- Some way to create namespaces
+- Lexer/Parser
+- Signal handling
+- Terminal
+- Something more?
+
+* Implementation (Process spawning)
+
+Some facts about Go programs:
+
+- *Cannot* execute plain _fork_ syscall;
+- *Cannot* execute any modern variation (clone(2), vfork(2), etc) directly;
+- *Cannot* execute lots of process related syscalls (setsid(2), setns(2), etc);
+
+Why?
+
+Mostly because *every* Go program is multithreaded (ever).
+
+* Implementation (Processes)
+
+How to create processes in Go?
+
+.link https://golang.org/pkg/os/exec/ os/exec
+.link https://golang.org/pkg/os/#StartProcess os.StartProcess
+.link https://golang.org/pkg/syscall/#ForkExec syscall.ForkExec
+
+- It is safe to use _ForkExec_ or _StartProcess_, but to be usable you'll re-implement _os/exec_.
+- The _os/exec_ library is safe, portable and supports additional useful features.
+
+* os/exec example (Portable)
+
+- Cmd.Stdin is an *io.Reader*
+- Cmd.Stdout and Cmd.Stderr are *io.Writer*
+
+.play ./exec.go /func uptime/,/OMIT/ HL1
+
+* Lesson 1
+
+_Use_the_portable_API_wherever_possible_
+
+- Avoid syscall package;
+- Avoid unsafe package;
+
+_Go_portable_std_library_do_the_right_thing_most_of_the_time!_
+
+* Go and namespaces
+
+Namespace/container syscalls cannot be executed directly in Go because
+of multithread limitation.
+
+But Go supports invoking namespace syscalls after the _fork(2)_ and before
+the _execve(2)_ in the _ForkExec_ function using the _SysProcAttr_
+argument.
+
+- SysProcAttr.{UIdMapping,GidMapping}: Added in go1.4;
+- SysProcAttr.Unshare: Added in go1.7.3
+
+* Lesson 2
+
+_If_you_want_to_handle_namespaces_without_fork-and-exec_chain,_Go_isn't_the_way_to_go._
+
+* Lesson 2
+
+_If_you_want_to_handle_namespaces_without_fork-and-exec_chain,_Go_isn't_the_way_to_go._
+
+But, the good news are: This is the *best* way to get namespace right
+in a multi-threaded software.
+
+If you choose another language for the task, the software *must* be
+single-threaded or use the Go approach...
+
+* LXC
+
+.link https://github.com/lxc/lxc/blob/92281f027507b986b51de908d58b1487866874c1/src/lxc/attach.c#L843 github.com/lxc/lxc/src/lxc/attach.c
+
+  /* create intermediate subprocess, three reasons:
+   *       1. runs all pthread_atfork handlers and the
+   *          child will no longer be threaded
+   *          (we can't properly setns() in a threaded process)
+   *       2. we can't setns() in the child itself, since
+   *          we want to make sure we are properly attached to
+   *          the pidns
+   *       3. also, the initial thread has to put the attached
+   *          process into the cgroup, which we can only do if
+   *          we didn't already setns() (otherwise, user
+   *          namespaces will hate us)
+   */
+
+  pid = fork();
+
+* Lexer/Parser
+
+*Ken* *Thompson*: I write my lexers by hand. Much easier.
+
+.link http://books.google.com/books?id=nneBa6-mWfgC&printsec=frontcover&dq=coders+at+work&ei=RNRfS5fzMIO-zATqi-WlBw&cd=1#v=onepage&q=yacc&f=false Coders at Work
+.link http://research.swtch.com/yyerror Generating Good Syntax Errors - By Russ Cox
+
+* Lesson 3
+
+_A_handwritten_lexer_could_be_concurrent_and_yet_simple_.
+
+Nash lexer was based on the awesome talk by Rob Pike:
+
+.link https://www.youtube.com/watch?v=HxaD_trXwRE Lexical Scanning in Go
+
+* Nash lexer
+
+- 549 LoC;
+- 3 data types;
+- Automatic semicolon insertion;
+- Concurrent
+
+* Lexer (Usage)
+
+.play ./lex.ex.go /func scan/,/OMIT
+
+* Lexer (Impl.)
+
+  func Lex(name, input string) *Lexer {
+  	l := &Lexer{
+  		name:   name,
+  		input:  input,
+  		Tokens: make(chan Token),
+  	}
+
+  	go l.run() // concurrently run state machine
+
+  	return l
+  }
+
+* Lexer (Impl.)
+
+  // run lexes the input by executing state functions until the state is nil
+  func (l *Lexer) run() {
+  	l.line, l.lineStart, l.column, l.columnStart = 1, 1, 0, 0
+
+  	for state := lexStart; state != nil; {
+  		state = state(l)
+  	}
+
+  	l.emit(token.EOF)
+  	close(l.Tokens) // No more tokens will be delivered
+  }
+
+* Lexer (Impl.)
+
+  type stateFn func(*Lexer) stateFn
+
+  ...
+
+  func lexStart(l *Lexer) stateFn {
+  	r := l.next()
+
+  	switch {
+  	...
+  	case r == ';':
+  		l.emit(token.Semicolon)
+  		return lexStart
+  	case isSpace(r):
+  		return lexSpace
+  	case r == '"':
+  		l.ignore()
+  		return lexQuote
+  	case r == '#':
+  		return lexComment
+  	...
+
+* Parser
+
+- Recursive descent parser (handwritten)
+- 1223 LoC
+
+* Parser (Usage)
+
+Anyone can use to analyze nash scripts:
+
+  import (
+  	"fmt"
+
+  	"github.com/NeowayLabs/nash/parser"
+  )
+
+.play ./parser.ex.go /func parse/,/OMIT/
+
+* Parser (Impl.)
+
+Parser walkthrough:
+
+  type (
+  	// Parser parses nash files
+  	Parser struct {
+  		name       string // filename or name of the buffer
+  		content    string
+  		l          *scanner.Lexer
+  		tok        *scanner.Token // token saved for lookahead
+  		openblocks int
+
+  		insidePipe bool
+
+  		keywordParsers map[token.Token]parserFn
+  	}
+
+  	parserFn func(tok scanner.Token) (ast.Node, error)
+  )
+
+* parser.NewParser (Impl.)
+
+  func NewParser(name, content string) *Parser {
+  	p := &Parser{
+  		name:    name,
+  		content: content,
+  		l:       scanner.Lex(name, content),
+  	}
+
+  	p.keywordParsers = map[token.Token]parserFn{
+  		token.For:     p.parseFor,
+  		token.If:      p.parseIf,
+  		token.Fn:      p.parseFnDecl,
+  		token.Return:  p.parseReturn,
+  		token.Import:  p.parseImport,
+  		token.SetEnv:  p.parseSetenv,
+  		token.Rfork:   p.parseRfork,
+  		token.BindFn:  p.parseBindFn,
+  		token.Dump:    p.parseDump,
+  		token.Comment: p.parseComment,
+  		token.Illegal: p.parseError,
+  	}
+
+  	return p
+  }
+
+* Lesson 4
+
+_Keep_the_language_simple_
+
+*Add* *what* *matters* *on* *first* *release*
+
+- Add the features used 90% of the time first
+- Avoid adding complex features you can circunvent at first release
+- Keeping the code base small enables design changes with little effort
+
+*Keep* *out* *needless* *features*
+
+- Tons of other shells features are needless;
+- *Generics* *(just* *kidding)*
+
+* Shell engine
+
+Walks the AST, evaluating each node;
+
+     Lex -> parser -> evaluation (engine)
+
+- Embeddable shell
+- Nice API
+
+* Shell engine (Impl.)
+
+User importable API: *github.com/NeowayLabs/nash*
+Internal API: *github.com/NeowayLabs/nash/internal/sh*
+
+The package *internal/sh* is the shell engine implementation.
+
+* Shell embedding
+
+Basic example:
+
+  sh, err := nash.New()
+  err = sh.Exec("<stdin>", "rfork un { nc -v -l -p 8080 }")
+
+* Shell embedding
+
+Consuming the output:
+
+  var buf bytes.Buffer
+
+  sh, err := nash.New()
+  sh.SetStdout(&buf)
+  sh.SetStderr(&buf)
+  err = sh.Exec("monitoring", "iostat | grep xvdb")
+
+  fmt.Printf("/dev/xvdb I/O: %s\n", string(buf.Bytes()))
+
+* Lesson 5
+
+_Use_internal_package_name_when_project_requires_long_term_stable_API_
+
+The _internal_ package name guarantees no one are importing
+your internal modules.
