@@ -1,0 +1,334 @@
+Concurrency
+Gophercon Brazil Nov 05, 2016
+Tags: gophercon,golang,concurrency,channels
+
+Paulo Pizarro
+Core Team Leader at Neoway
+paulo.pizarro@neoway.com.br
+@pjpizarro
+
+* Notes
+
+The slides are available on [[https://github.com/ppizarro/2016-gopherconbr-concurrency]]
+
+.image images/gophercon-floripa-v2.png
+
+* Agenda
+
+- Background
+- Tradicional Architectures - pros and cons
+- Concurrency in Go
+
+* Background
+
+* Concurrency is not Parallelism
+
+In programming, concurrency is the composition of independently executing processes, while parallelism is the simultaneous execution of (possibly related) computations.
+
+Concurrency is about dealing with lots of things at once.
+
+Parallelism is about doing lots of things at once.
+
+.image images/concurrent_vs_parallel.png
+
+* A model for software construction
+
+Easy to understand.
+Easy to use.
+Easy to reason about.
+You don't need to be an expert!
+(Much nicer than dealing with the minutiae of parallelism (threads, semaphores, locks, barriers, etc.))
+
+* Processes
+
+Processes can be grouped into two categories:
+
+- *CPU* *bound*: those that are fully utilizing the CPU
+
+- *I/O* *bound*: those that are waiting for input or output
+
+* CPU bound
+
+Most problems that do not perform large IO are CPU bound, as most of their execution time is spent in solving the problem rather than reading/writing.
+
+Examples:
+
+- Search algorithms
+- Video/Audio/Content conversion/compression algorithms
+- Video streaming
+- Graphics processing/rendering e.g games, videos
+- Heavy mathematical computations like matrix multiplication, calculating factorials, finding prime numbers etc.
+
+* I/O bound
+
+Most of the execution time is spent on reading/writing operations
+
+Examples:
+
+- Network applications that handle many connections simultaneously or concurrently
+
+For each connection:
+
+- to accept a connection
+- read a request
+- do some finite and predictable amount of work
+- then write a response to the peer
+
+* SO - Input and Output Primitives
+
+- read
+- write
+- select - input/output multiplexing
+
+Operations mode:
+
+- Blocking
+- Non-Blocking
+
+* Read - Blocking Mode
+
+.code code/read-blocking.c
+
+* More than one task at time
+
+The main thread is blocked on the read operation then for execute another task we should:
+
+- fork the process, or
+- create another thread
+
+* Multi-Threaded Architecture - Blocking I/O
+
+.image images/multi-thread.jpg
+.image images/java.png
+
+* Read - nonblocking mode: CPU FULL
+
+.code code/read-nonblocking.c
+
+* Read nonblocking mode: sleep :(
+
+.code code/read-nonblocking-sleep.c
+
+* More than one task at time - nonblocking mode - CPU FULL :(
+
+.code code/read-nonblocking-2-tasks.c
+
+* select - input/output multiplexing :)
+
+.code code/select-read.c
+
+* select - input/output multiplexing with timeout
+
+.code code/select-read-timeout.c
+
+* select - callbacks
+
+.code code/select-callbacks.c
+
+* Event-Driven State Machine Architecture - Non-Blocking I/O
+
+.image images/event-driven.jpg
+.image images/nodejs.png
+
+* Tradicional Architectures - pros and cons
+
+* Multi-Threaded Architecture
+
+Pros:
+- Way of programming (synchronous): The control flow is easier to express
+- Exception handling is easier to handle
+- Easily scalable across cores: without having explicit code to achieve this
+
+Cons:
+- synchronization (shared memory): mutex
+- multi-thread programming: dead-lock (non-deterministic), hard to debug
+- overhead - context switch, mutex, thread creation and deletion
+- consume lots of space for stack of blocked threads
+
+* Event-Driven State Machine Architecture
+
+Pros:
+- highly scalable: highly scalable as fewer resources are consumed
+- robust to load: throughput remaining constant for a large range of load
+- no synchronization needed: one thread for main-loop
+
+Cons:
+- callback hell
+- callback must return soon - long-time functions blocks all system
+- writing code is complex (asynchronous)
+- writing a large bussiness logic centric system is cumbersome
+- exception handling is not straightforward
+- cannot take advantage of multi-core systems
+
+* Concurrency in Go: The best of both worlds
+
+* History
+
+The model of computation used by the Go language is based upon the idea of *communicating* *sequential* *processes* (*CSP*) put forth by C.A.R. Hoare in his seminal paper published in 1978
+
+Languages with similar features:
+
+- Occam (May, 1983)
+- Erlang (Armstrong, 1986)
+- Newsqueak (Pike, 1988)
+- Concurrent ML (Reppy, 1993)
+- Alef (Winterbottom, 1995)
+- Limbo (Dorward, Pike, Winterbottom, 1996).
+
+* Go supports concurrency
+
+- *goroutines*: it is a function executing concurrently
+- *channels*: goroutines comunicate and synchronize using channels
+- *select*: multi-way concurrent control
+
+* Goroutines
+
+- *function* executing *concurrently* with other goroutines
+- it's not a thread
+- *lightweight*, costing little more than the allocation of stack space
+- are *multiplexed* onto multiple OS threads
+- there might be only one thread in a program with thousands of goroutines
+
+*Stack*
+
+- Initial stack size very small, currently 8kb
+- Grow as need
+
+.image images/goroutines-multiplexing.png
+
+* Goroutines - to execute a goroutine, just go!
+
+.play code/goroutine-example.go
+
+* Synchronization - The Go approach
+
+Don't communicate by sharing memory, share memory by communicating.
+
+- Not use locks and semaphores to synchronize (shared memory)
+- Use *channels* to synchronize
+
+#.image images/go_chan_chan_2.png
+#.image images/channel.jpg
+.image images/synchronization-channels2.png
+
+* Synchronous Channels - unbuffered
+
+A channel can allow the launching goroutine to wait for the sort to complete.
+
+.code code/channel-wait-for-completion.go
+
+* Buffered Channels
+
+A buffered channel can be used like a semaphore, for instance to limit throughput.
+
+.code code/channel-limit-throughput.go
+
+#* Channels of channels - it is a first-class value
+
+#A common use of this property is to implement safe, parallel demultiplexing.
+
+#.code code/channel-1st-class-struct.go
+#.code code/channel-1st-class-client.go
+#.code code/channel-1st-class-server.go
+
+* Select
+The select statement is like a switch, but the decision is based on ability to communicate rather than equal values.
+
+.code code/select-example.go
+
+* Ping Pong
+
+.play code/ping-pong.go /START OMIT/,/END OMIT/
+
+* Load Balancer
+
+.image images/load-balancer.jpg
+
+* Load Balancer
+
+.code code/simple-load-balancer.go
+
+- NumWorkers could be huge.
+- it almost trivial to build a safe, working, scalable, parallel design.
+- No explicit synchronization needed.
+- The structure of the program is implicitly synchronized.
+
+* Concurrency Design
+
+.image images/gophercomplex1.jpg
+
+A complex problem can be broken down into easy-to-understand components.
+The pieces can be composed concurrently.
+The result is easy to understand, efficient, scalable, and correct.
+Maybe even parallel.
+
+* Concurrency
+
+- You write your programs as if they do blocking I/O (synchronous)
+- Goroutines are extremely *lightweight* in comparison to threads
+- It's routine to create thousands of goroutines in one program. 
+- Apllications use *all* cores
+- Goroutines are cooperatively scheduled
+- You get quick context switches and you take advantage of all the cores in your system.
+- Switching between goroutines only occurs at well defined points
+- Compiler knows the registers use and saves them automatically
+
+* Go - Runtime
+
+.image images/runtime.png
+
+- scheduler
+- netpoller
+- garbage colletion
+-  among other things
+
+* Go Scheduler
+
+Here we see 2 threads (M), each holding a context (P), each running a goroutine (G). In order to run goroutines, a thread must hold a context.
+.image images/in-motion.jpg
+
+*M*: Machine (OS Thread) *G*: Goroutine *P*: Processor (context) = GOMAXPROCS = #cores
+
+* Go Scheduler: syscall
+
+.image images/syscall.jpg
+
+Since a thread cannot both be executing code and be blocked on a syscall, we need to hand off the context so it can keep scheduling.
+
+* Go Scheduler: Stealing work
+
+.image images/steal.jpg
+
+This can happen if the amount of work on the contexts' runqueues is unbalanced.
+
+* The Go netpoller
+
+- Runs in it own thread and polls the OS's asynchronous I/O network for data
+- Goroutines asking for network I/O block waiting for the netpoller to give data, not for a system event 
+- Go treats Unix sockets and network connection file descriptors the same, so Unix socket I/O will not block OS thread
+- netpoller uses event-driver architecture to handle I/O network
+
+#In Go, all I/O is blocking. The Go ecosystem is built around the idea that you write against a blocking interface and then handle concurrency through goroutines and channels rather than callbacks and futures.
+
+#I covered how the Go scheduler handles syscalls. To handle a blocking syscall, we need a thread that can be blocked inside the operating system. If we were to build our blocking I/O on top of the OS' blocking I/O, we'd spawn a new thread for every client stuck in a syscall. This becomes really expensive once you have 10,000 client threads, all stuck in a syscall waiting for their I/O operation to succeed.
+
+#Go gets around this problem by using the asynchronous interfaces that the OS provides, but blocking the goroutines that are performing I/O.
+
+#The part that converts asynchronous I/O into blocking I/O is called the netpoller. It sits in its own thread, receiving events from goroutines wishing to do network I/O. The netpoller uses whichever interface the OS provides to do polling of network sockets. On Linux, it uses epoll, on the BSDs and Darwin, it uses kqueue and on Windows it uses IoCompletionPort. These interfaces all have in common that they provide user space a way to efficiently poll for the status of network I/O.
+
+.image images/netpoller.jpg
+
+* Goroutines scheduling points
+
+- Channel sending and receiving
+- Go statement
+- Blocking syscall or I/O network operations
+- Garbage collection
+
+.image images/goroutine-schedule-points.jpg
+
+* Conclusion
+Concurrency is powerful.
+Concurrency is not parallelism.
+Concurrency enables parallelism.
+Concurrency makes parallelism (and scaling and everything else) easy.
